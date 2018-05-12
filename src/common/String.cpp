@@ -294,22 +294,25 @@ char const numberChars[] = "-.+0123456789ABCDEFXabcdefx";
 ByteString numberByteString(numberChars);
 String numberString(numberChars);
 
-static thread_local std::basic_stringstream<char> *LocaleImplStream;
-static thread_local std::basic_stringstream<wchar_t> *LocaleImplWStream;
 static thread_local struct LocaleImpl
 {
-	std::basic_stringstream<char> &stream;
-	std::basic_stringstream<wchar_t> &wstream;
+	std::basic_stringstream<char> stream;
+	std::basic_stringstream<wchar_t> wstream;
 
-	LocaleImpl():
-		stream(*(LocaleImplStream = new std::basic_stringstream<char>())),
-		wstream(*(LocaleImplWStream = new std::basic_stringstream<wchar_t>()))
+	LocaleImpl()
 	{
 		stream.imbue(std::locale::classic());
 		wstream.imbue(std::locale::classic());
 	}
 
-	~LocaleImpl();
+#if defined(WIN) && defined(__GNUC__) && !defined(_64BIT)
+	// The MinGW WIN32 threading model is currently broken in that the
+	// runtime invokes the destructors via cdecl, while the compiled code
+	// expects thiscall.
+	__cdecl ~LocaleImpl()
+	{
+	}
+#endif
 
 	inline void PrepareStream(ByteStringBuilder &b)
 	{
@@ -378,16 +381,6 @@ static thread_local struct LocaleImpl
 	}
 }
 LocaleImpl;
-
-// This specific implementation of destruction seems to help against the
-// currently broken WIN32 threading model on MinGW. The real destructor is
-// called by the runtime as cdecl but the compiled code expects thiscall.
-
-LocaleImpl::~LocaleImpl()
-{
-	delete LocaleImplStream;
-	delete LocaleImplWStream;
-}
 
 ByteString ByteStringBuilder::Build() const
 {
