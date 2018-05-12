@@ -296,14 +296,18 @@ String numberString(numberChars);
 
 static thread_local struct LocaleImpl
 {
-	std::basic_stringstream<char> stream;
-	std::basic_stringstream<wchar_t> wstream;
+	std::basic_stringstream<char> &stream;
+	std::basic_stringstream<wchar_t> &wstream;
 
-	LocaleImpl()
+	LocaleImpl():
+		stream(*new std::basic_stringstream<char>()),
+		wstream(*new std::basic_stringstream<wchar_t>())
 	{
 		stream.imbue(std::locale::classic());
 		wstream.imbue(std::locale::classic());
 	}
+
+	~LocaleImpl();
 
 	inline void PrepareStream(ByteStringBuilder &b)
 	{
@@ -372,6 +376,20 @@ static thread_local struct LocaleImpl
 	}
 }
 LocaleImpl;
+
+// This specific implementation of destruction seems to help against the
+// currently broken WIN32 threading model on MinGW. The real destructor is
+// called by the runtime as cdecl but the compiled code expects thiscall.
+static destroyLocaleImpl()
+{
+	delete &LocaleImpl.stream;
+	delete &LocaleImpl.wstream;
+}
+
+LocaleImpl::~LocaleImpl()
+{
+	destroyLocaleImpl();
+}
 
 ByteString ByteStringBuilder::Build() const
 {
